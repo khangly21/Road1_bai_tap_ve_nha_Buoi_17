@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leanbot - Điền chỗ trống</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;background:#fff8e7;margin:0;color:#222}
+header{background:#e63946;color:#fff;text-align:center;padding:16px}
+header h1{margin:0;font-size:28px}
+.wrap{max-width:900px;margin:auto;padding:16px}
+.map{display:flex;gap:16px;align-items:center;background:#fff;border-radius:14px;padding:12px;box-shadow:0 2px 8px #0002}
+.map ol{font-size:18px;line-height:1.7}
+.card{background:#fff;border-radius:14px;padding:14px;margin:16px 0;box-shadow:0 2px 8px #0002}
+.card h3{margin:0 0 8px;color:#1d3557}
+pre{background:#1e2235;color:#f1f1f1;font-size:19px;padding:14px;border-radius:10px;overflow-x:auto;line-height:1.6}
+input{font:inherit;font-size:19px;width:110px;border:3px solid #ffb703;border-radius:8px;padding:2px 6px;background:#fffbe6;color:#000}
+input.ok{border-color:#2a9d8f;background:#d8f3dc}
+input.bad{border-color:#e63946;background:#ffe5e5}
+.btn{font-size:20px;padding:10px 22px;border:none;border-radius:12px;background:#2a9d8f;color:#fff;cursor:pointer;margin:6px}
+.btn.y{background:#ffb703;color:#000}
+#flash{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-150%);background:#ffb703;color:#000;font-size:20px;padding:14px 22px;border-radius:14px;box-shadow:0 4px 14px #0004;transition:.35s;max-width:90%;z-index:9;text-align:center}
+#flash.show{transform:translateX(-50%) translateY(0)}
+#score{font-size:26px;text-align:center;margin:10px}
+.stars{font-size:40px;text-align:center}
+</style></head><body>
+<div id="flash"></div>
+<header><h1>🤖 Leanbot đi đường - Điền chỗ trống</h1><div>Bấm vào ô vàng, đọc gợi ý, rồi điền nhé!</div></header>
+<div class="wrap">
+<div class="map"><div style="font-size:60px">🗺️</div><ol>
+<li>Xuất phát, bám vạch bên phải.</li>
+<li>Gặp Ngã 1 (vạch ngang 1111): bíp 1 lần, quẹo <b>trái</b>.</li>
+<li>Đi 20 cm thì dừng lại <b>gắp vật</b>.</li>
+<li>Gặp Ngã 2: bíp 2 lần, quẹo <b>phải</b>.</li>
+<li>Gặp Ngã 3: đi thẳng, hết vạch thì đèn vàng, dừng ở Đích 🏁.</li></ol></div>
+<div id="cards"></div>
+<div style="text-align:center"><button class="btn" onclick="check()">✅ Kiểm tra</button><button class="btn y" onclick="reset()">🔄 Làm lại</button></div>
+<div id="score"></div><div class="stars" id="stars"></div>
+</div>
+<script>
+const B=(id)=>`<input data-id="${id}" autocomplete="off">`;
+const blanks={
+a:{ans:["30"],hint:"Tốc độ đi thẳng là 30 vòng mỗi phút (rpm). Điền số 30."},
+b:{ans:["0b1111"],hint:"Vạch ngang: cả 4 mắt cảm biến đều thấy màu đen, tức là 4 số 1. Viết 0b rồi bốn số 1."},
+c:{ans:["++"],hint:"Muốn tăng biến đếm thêm 1, ta viết hai dấu cộng."},
+d:{ans:["return"],hint:"Từ khóa trả kết quả ra khỏi hàm, có 6 chữ cái, bắt đầu bằng chữ r."},
+e:{ans:["true"],hint:"Hàm bool chỉ trả về true (đúng) hoặc false (sai). Gặp vạch ngang thì là đúng."},
+f:{ans:["close"],hint:"Kẹp mở là open, kẹp đóng lại là ... (tiếng Anh, 5 chữ cái)."},
+g:{ans:["tone"],hint:"Hàm làm Leanbot kêu bíp có 4 chữ cái: t _ n e."},
+h:{ans:["90"],hint:"Quẹo một góc vuông thì quay bao nhiêu độ?"},
+i:{ans:["quayTrai"],hint:"Ở Ngã 1 robot quẹo trái. Tên hàm quay trái đã viết sẵn ở trên: quay + Trai."},
+j:{ans:["quayPhai"],hint:"Ở Ngã 2 robot quẹo phải. Tên hàm: quay + Phai."},
+k:{ans:["200"],hint:"20 cm bằng bao nhiêu mm? Một cm bằng 10 mm."},
+l:{ans:["nhatVat"],hint:"Tên hàm gắp vật, viết y như lúc định nghĩa: nhat + Vat."},
+m:{ans:["void"],hint:"Hàm chỉ làm việc mà không trả giá trị thì có kiểu trả về là ..."},
+n:{ans:["0b0000"],hint:"Mất vạch: không mắt nào thấy đen, tức là 4 số 0."},
+p:{ans:["stopAndWait"],hint:"Hàm dừng robot và chờ dừng hẳn: stop + And + Wait (viết liền, chữ A và W viết hoa)."},
+q:{ans:["false"],hint:"Lúc mới bắt đầu, robot chưa xử lý vạch ngang nào, nên giá trị là sai (tiếng Anh)."},
+o:{ans:["9600"],hint:"Tốc độ Serial này phải khớp với Serial Monitor. Trong code dùng 9600."}
+};
+const parts=[
+["1. Các số cài đặt và biến",`const int TOC_DO      = ${B('a')};    // rpm
+const int TOC_DO_QUAY = 45;    // rpm
+const int MAU_1111    = 4;     // > 4 nghĩa là khi phát hiện 5 mẫu 1111 liên tiếp thì kết luận đó là vạch ngang
+const int KC_GAP_MM   = ${B('k')};   // 20 cm
+
+int dem_nga_re = 0;            // đã gặp bao nhiêu lần 1111
+int dem1111 = 0, dem0000 = 0;  // đếm mẫu 1111 và mẫu 0000 liên tiếp
+bool daXuLy = ${B('q')};           // tránh đếm lại cùng một vạch ngang 1111
+bool daGap  = false;           // đã gắp vật chưa?`],
+["1b. Hàm dừng",`// hàm dừng
+void dung() { LbMotion.${B('p')}(); }`],
+["2. Hàm quay trái",`${B('m')} quayTrai(int goc) {
+  LbMotion.runLRrpm(-TOC_DO_QUAY, +TOC_DO_QUAY);
+  LbMotion.waitRotationDeg(goc);
+  LbMotion.stopAndWait();
+}`],
+["3. Nhận ra vạch ngang",`bool gapVachNgang(int line) {
+  if (line == ${B('b')}) dem1111${B('c')}; else { dem1111 = 0; daXuLy = false; }
+  if (dem1111 > MAU_1111 && !daXuLy) {
+    dung();
+    dem1111 = 0;
+    daXuLy = true;
+    ${B('d')} ${B('e')};
+  }
+  return false;
+}`],
+["4. Gắp vật",`void nhatVat() {
+  dung();
+  LbMotion.runLRrpm(TOC_DO / 2, TOC_DO / 2);
+  LbMotion.waitDistanceMm(25);
+  dung();
+  LbGripper.${B('f')}();
+  LbDelay(600);
+  Leanbot.${B('g')}(1500, 200);
+}`],
+["5. Xử lý ngã rẽ",`if (dem_nga_re == 1) {
+  chay(TIEN_NGA_MM);
+  ${B('i')}(${B('h')});
+  kcMoc = LbMotion.getDistanceMm();
+} else if (dem_nga_re == 2) {
+  chay(TIEN_NGA_MM);
+  ${B('j')}(90);
+}`],
+["6. Đi đủ 20 cm thì gắp",`if (daDi >= KC_GAP_MM) {
+  ${B('l')}();
+  daGap = true;
+}`],
+["7. Mất vạch và Serial",`Serial.begin(${B('o')});
+if (line == ${B('n')}) {
+  timVachTangDan();
+}`]];
+document.getElementById('cards').innerHTML=parts.map(p=>`<div class="card"><h3>${p[0]}</h3><pre>${p[1]}</pre></div>`).join('');
+const fl=document.getElementById('flash');let t;
+function flash(m){fl.textContent="💡 "+m;fl.classList.add('show');clearTimeout(t);t=setTimeout(()=>fl.classList.remove('show'),4500);}
+document.querySelectorAll('input').forEach(i=>i.addEventListener('focus',()=>flash(blanks[i.dataset.id].hint)));
+function check(){let ok=0,all=0;document.querySelectorAll('input').forEach(i=>{all++;const g=blanks[i.dataset.id].ans.includes(i.value.trim());i.className=g?'ok':'bad';if(g)ok++;});
+document.getElementById('score').textContent=`Em đúng ${ok}/${all} ô!`+(ok==all?" 🎉 Giỏi quá!":" Ô đỏ: bấm lại để xem gợi ý nhé.");
+const s=Math.round(ok/all*5);document.getElementById('stars').textContent="⭐".repeat(s)+"☆".repeat(5-s);}
+function reset(){document.querySelectorAll('input').forEach(i=>{i.value='';i.className='';});score.textContent='';stars.textContent='';}
+</script></body></html>
